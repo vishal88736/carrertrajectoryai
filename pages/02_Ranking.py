@@ -169,32 +169,19 @@ else:
             main_col, score_col = st.columns([3, 1])
 
             with main_col:
-                st.markdown(f"""
-                <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.8rem;">
-                    <div style="width:42px;height:42px;border-radius:50%;
-                        background:{'linear-gradient(135deg,#f59e0b,#fbbf24)' if rank==1 else 'linear-gradient(135deg,#6366f1,#8b5cf6)'};
-                        display:flex;align-items:center;justify-content:center;
-                        font-weight:800;font-size:0.9rem;flex-shrink:0;
-                        color:{'#000' if rank==1 else 'white'};">
-                        {'🥇' if rank==1 else '#'+str(rank)}
-                    </div>
-                    <div>
-                        <div style="font-weight:700;font-size:1.05rem;color:#e2e8f0;">
-                            {c['name']}
-                            {'<span style="background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#000;font-size:0.68rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:999px;margin-left:0.5rem;">💎 HIDDEN GEM</span>' if is_gem else ''}
-                        </div>
-                        <div style="color:#64748b;font-size:0.8rem;margin-top:2px;">
-                            📍 {c.get('location','N/A')} · 💼 {c.get('years_of_experience',0)} years experience
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
+                # Header: Name and rank
+                gem_badge = " 💎 HIDDEN GEM" if is_gem else ""
+                rank_icon = "🥇" if rank == 1 else f"#{rank}"
+                st.markdown(f"### {rank_icon} {c['name']}{gem_badge}")
+                
+                # Location and experience
+                st.markdown(f"📍 {c.get('location','N/A')} · 💼 {c.get('years_of_experience',0)} years experience")
+                
                 # Skills
-                st.markdown("<div style='margin-bottom:0.5rem;color:#64748b;font-size:0.78rem;font-weight:600;'>SKILLS</div>", unsafe_allow_html=True)
+                st.markdown("**SKILLS**")
                 render_skills_tags(c["skills"]["current"][:8], job_required=job["required_skills"])
                 if c["skills"].get("learning"):
-                    st.markdown("<div style='color:#64748b;font-size:0.72rem;margin-top:0.3rem;'>Learning →</div>", unsafe_allow_html=True)
+                    st.markdown("*Learning →*")
                     render_skills_tags(c["skills"]["learning"][:4], tag_type="learning")
 
             with score_col:

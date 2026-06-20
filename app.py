@@ -38,52 +38,6 @@ if "copilot_history" not in st.session_state:
 if "custom_candidates" not in st.session_state:
     st.session_state.custom_candidates = []
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-with st.sidebar:
-    render_sidebar_logo()
-
-    st.markdown("### Navigation")
-
-    pages = [
-        ("🏠", "Dashboard", "pages/01_Dashboard.py"),
-        ("📊", "Candidate Ranking", "pages/02_Ranking.py"),
-        ("👤", "Candidate Profile", "pages/03_Profile.py"),
-        ("💎", "Hidden Gems", "pages/04_HiddenGems.py"),
-        ("🔮", "Skill Gap Simulator", "pages/05_SkillGap.py"),
-        ("📈", "Talent Analytics", "pages/06_Analytics.py"),
-        ("🤖", "Recruiter Copilot", "pages/07_Copilot.py"),
-        ("💼", "Job Management", "pages/08_Jobs.py"),
-        ("⚙️", "Admin Panel", "pages/09_Admin.py"),
-    ]
-
-    for icon, name, path in pages:
-        if st.button(f"{icon} {name}", key=f"nav_{name}", use_container_width=True):
-            st.switch_page(path)
-
-    st.markdown("---")
-
-    # Job selector
-    from data.sample_data import get_jobs
-    jobs = get_jobs()
-    job_names = {j["id"]: f"{j['title']} @ {j['company']}" for j in jobs}
-    selected_job = st.selectbox(
-        "🎯 Active Job Requisition",
-        options=list(job_names.keys()),
-        format_func=lambda x: job_names[x],
-        index=0,
-        key="sidebar_job_select"
-    )
-    st.session_state.selected_job_id = selected_job
-
-    st.markdown("---")
-    st.markdown("""
-    <div style="color:#475569; font-size:0.72rem; text-align:center; padding:0.5rem 0;">
-        <div style="margin-bottom:0.3rem;">🔒 Enterprise Grade · GDPR Compliant</div>
-        <div>Bias-Mitigated · Explainable AI</div>
-        <div style="margin-top:0.5rem; color:#334155;">v1.0.0 · CareerTrajectory AI</div>
-    </div>
-    """, unsafe_allow_html=True)
-
 # ── Hero Landing Page ─────────────────────────────────────────────────────────
 
 st.markdown("""
