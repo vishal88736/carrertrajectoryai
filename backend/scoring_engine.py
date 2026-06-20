@@ -411,6 +411,9 @@ def detect_hidden_gems(candidates: List[Dict], threshold_yoe: int = 3,
             c["hidden_gem"] = True
             c["gem_reason"] = _explain_gem(c, yoe, momentum, behavioral, semantic)
             gems.append(c)
+        else:
+            c["hidden_gem"] = False
+            c.pop("gem_reason", None)
 
     return gems
 
