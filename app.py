@@ -57,12 +57,8 @@ with st.sidebar:
     ]
 
     for icon, name, path in pages:
-        st.markdown(f"""
-        <a href="/{path.split('/')[-1].replace('.py','').replace('0','').lstrip('_1234567890')}" 
-           style="text-decoration:none;">
-        <div class="sidebar-nav-item">{icon} {name}</div>
-        </a>
-        """, unsafe_allow_html=True)
+        if st.button(f"{icon} {name}", key=f"nav_{name}", use_container_width=True):
+            st.switch_page(path)
 
     st.markdown("---")
 
@@ -91,7 +87,7 @@ with st.sidebar:
 # ── Hero Landing Page ─────────────────────────────────────────────────────────
 
 st.markdown("""
-<div style="text-align:center; padding: 3rem 0 2rem; animate-fade-in;">
+<div class="animate-fade-in" style="text-align:center; padding: 3rem 0 2rem;">
     <div style="font-size:4rem; margin-bottom:0.5rem;">🚀</div>
     <h1 style="font-size:3rem; font-weight:900; margin-bottom:0.5rem;
         background:linear-gradient(135deg,#6366f1,#8b5cf6,#06b6d4);

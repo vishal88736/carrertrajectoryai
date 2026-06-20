@@ -164,12 +164,6 @@ else:
         is_gem = c.get("hidden_gem", False)
         rank = c.get("rank", "—")
 
-        # Card container
-        gem_style = "border-color:#f59e0b; box-shadow:0 0 20px rgba(245,158,11,0.15);" if is_gem else ""
-        st.markdown(f"""
-        <div class="candidate-card" style="{gem_style} position:relative;">
-        </div>
-        """, unsafe_allow_html=True)
 
         with st.container():
             main_col, score_col = st.columns([3, 1])

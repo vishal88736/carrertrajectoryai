@@ -28,7 +28,7 @@ if "custom_candidates" not in st.session_state:
 candidates = get_candidates() + st.session_state.custom_candidates
 job = get_job_by_id(st.session_state.selected_job_id)
 ranked = rank_candidates(candidates, job)
-gems = detect_hidden_gems(candidates)
+gems = detect_hidden_gems(ranked)
 
 render_page_header("Recruiter Copilot", 
     "Ask anything about your candidate pool in natural language. AI-powered insights.",
@@ -300,23 +300,6 @@ with chat_container:
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.markdown(f"""
-            <div style="display:flex;gap:0.7rem;margin-bottom:0.7rem;align-items:flex-start;">
-                <div style="width:32px;height:32px;border-radius:50%;
-                     background:linear-gradient(135deg,#10b981,#059669);
-                     display:flex;align-items:center;justify-content:center;
-                     font-size:0.9rem;flex-shrink:0;">🤖</div>
-                <div style="flex:1;">
-                    <div style="color:#475569;font-size:0.72rem;margin-bottom:3px;">
-                        Copilot · {msg.get('time','')}
-                    </div>
-                    <div style="background:#1a1a2e;border:1px solid #334155;
-                         color:#e2e8f0;border-radius:4px 16px 16px 16px;
-                         padding:0.8rem 1rem;font-size:0.88rem;line-height:1.6;">
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
             # Render markdown properly
             with st.chat_message("assistant", avatar="🤖"):
                 st.markdown(msg["content"])

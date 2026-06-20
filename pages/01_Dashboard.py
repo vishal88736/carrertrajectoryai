@@ -27,7 +27,7 @@ candidates = get_candidates()
 jobs = get_jobs()
 job = get_job_by_id(st.session_state.selected_job_id)
 ranked = rank_candidates(candidates, job)
-gems = detect_hidden_gems(candidates)
+gems = detect_hidden_gems(ranked)
 
 # ── Header ────────────────────────────────────────────────────────────────────
 render_page_header(
