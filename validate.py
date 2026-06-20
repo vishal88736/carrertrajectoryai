@@ -1,6 +1,7 @@
 """Quick validation script for CareerTrajectory AI"""
 import sys
-sys.path.insert(0, 'd:/resume_shortlisting')
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 print("Testing data layer...")
 from data.sample_data import get_candidates, get_jobs
@@ -56,11 +57,11 @@ fig = go.Figure(go.Bar(x=[1,2,3], y=[0.8, 0.7, 0.9]))
 print(f"  Plotly figure created: {type(fig)}")
 
 print("\n" + "="*50)
-print("ALL SYSTEMS OPERATIONAL ✓")
+print("ALL SYSTEMS OPERATIONAL [OK]")
 print("="*50)
 print(f"\nFPS Range: {min(c['scores']['fps'] for c in ranked):.3f} - {max(c['scores']['fps'] for c in ranked):.3f}")
 print(f"Avg Momentum: {sum(c['scores']['career_momentum'] for c in ranked)/len(ranked):.3f}")
 print(f"\nRanking Order:")
 for c in ranked:
-    gem = " 💎 HIDDEN GEM" if c.get('hidden_gem') else ""
+    gem = " [HIDDEN GEM]" if c.get('hidden_gem') else ""
     print(f"  #{c['rank']} {c['name']:20s} FPS={c['scores']['fps']:.3f}  Momentum={c['scores']['career_momentum']:.3f}{gem}")
