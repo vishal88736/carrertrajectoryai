@@ -21,9 +21,213 @@ render_page_header("Admin Panel",
     "System configuration, model evaluation, weights tuning, and deployment monitoring.",
     "⚙️")
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "⚖️ Score Weights", "📊 Model Evaluation", "🏗️ Architecture", "📋 Roadmap"
+tab0, tab1, tab2, tab3, tab4 = st.tabs([
+    "🧠 AI Configuration", "⚖️ Score Weights", "📊 Model Evaluation", "🏗️ Architecture", "📋 Roadmap"
 ])
+
+# ── Tab 0: AI Configuration (Phase 2) ─────────────────────────────────────────
+with tab0:
+    st.markdown("### 🧠 Phase 2 — AI Subsystem Configuration")
+
+    # ── API Key Status ──
+    st.markdown("#### 🔑 API Connections")
+    api_cols = st.columns(4)
+
+    def _check_api(name, check_fn):
+        try:
+            return check_fn()
+        except Exception:
+            return False
+
+    def _groq_ok():
+        from backend.ai.config import GROQ_API_KEY
+        return bool(GROQ_API_KEY)
+
+    def _github_ok():
+        from backend.ai.config import GITHUB_TOKEN
+        return bool(GITHUB_TOKEN)
+
+    def _kaggle_ok():
+        from backend.ai.config import KAGGLE_KEY
+        return bool(KAGGLE_KEY)
+
+    def _embeddings_ok():
+        from backend.ai.embeddings import get_embedder
+        return get_embedder().is_available
+
+    apis = [
+        ("Groq (Llama 3)", _groq_ok, "GROQ_API_KEY"),
+        ("GitHub API", _github_ok, "GITHUB_TOKEN"),
+        ("Kaggle API", _kaggle_ok, "KAGGLE_KEY"),
+        ("Embeddings", _embeddings_ok, "all-MiniLM-L6-v2"),
+    ]
+
+    for col, (name, check, env_hint) in zip(api_cols, apis):
+        ok = _check_api(name, check)
+        with col:
+            st.markdown(f"""
+            <div class="ct-card" style="text-align:center;padding:1rem;">
+                <div style="font-size:1.5rem;margin-bottom:0.3rem;">{'🟢' if ok else '🔴'}</div>
+                <div style="font-weight:700;color:{'#10b981' if ok else '#ef4444'};font-size:0.85rem;">{name}</div>
+                <div style="color:#64748b;font-size:0.72rem;margin-top:0.2rem;">
+                    {'Connected' if ok else f'Set {env_hint}'}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── ChromaDB Status ──
+    ai_col1, ai_col2 = st.columns(2)
+
+    with ai_col1:
+        st.markdown("#### 🗄️ ChromaDB Vector Store")
+        try:
+            from backend.ai.vector_store import get_vector_store
+            store = get_vector_store()
+            stats = store.get_stats()
+            st.markdown(f"""
+            <div class="ct-card">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;">
+                    <div>
+                        <div style="color:#64748b;font-size:0.72rem;text-transform:uppercase;">Status</div>
+                        <div style="color:{'#10b981' if stats.get('available') else '#ef4444'};font-weight:700;">
+                            {'🟢 Active' if stats.get('available') else '🔴 Inactive'}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="color:#64748b;font-size:0.72rem;text-transform:uppercase;">Candidates Indexed</div>
+                        <div style="color:#e2e8f0;font-weight:700;font-size:1.2rem;">{stats.get('candidates', 0)}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        except Exception as e:
+            st.warning(f"ChromaDB not available: {e}")
+
+        if st.button("🔄 Rebuild Vector Index", key="rebuild_chromadb", use_container_width=True):
+            with st.spinner("Reindexing all candidates into ChromaDB..."):
+                try:
+                    from backend.ai.vector_store import get_vector_store
+                    from data.sample_data import get_candidates
+                    from backend.scoring_engine import rank_candidates
+                    from data.sample_data import get_job_by_id
+                    cands = get_candidates()
+                    job = get_job_by_id("j001")
+                    ranked = rank_candidates(cands, job)
+                    store = get_vector_store()
+                    if store.is_available:
+                        store.upsert_candidates_batch(ranked)
+                        st.success(f"✅ Indexed {len(ranked)} candidates into ChromaDB")
+                    else:
+                        st.error("ChromaDB is not available")
+                except Exception as e:
+                    st.error(f"Reindex failed: {e}")
+
+    with ai_col2:
+        st.markdown("#### 📊 LightGBM Ranking Model")
+        try:
+            from backend.ai.ranking_model import get_ranking_model
+            model = get_ranking_model()
+            status = model.get_status()
+            st.markdown(f"""
+            <div class="ct-card">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;">
+                    <div>
+                        <div style="color:#64748b;font-size:0.72rem;text-transform:uppercase;">Status</div>
+                        <div style="color:{'#10b981' if status['trained'] else '#f59e0b'};font-weight:700;">
+                            {'🟢 Trained' if status['trained'] else '🟡 Not Trained'}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="color:#64748b;font-size:0.72rem;text-transform:uppercase;">Model File</div>
+                        <div style="color:#e2e8f0;font-size:0.8rem;">{'Exists ✅' if status['model_exists'] else 'Not found'}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if status.get("feature_importance"):
+                pass  # plotly go already imported at module level
+                fi = status["feature_importance"]
+                fig_fi = go.Figure(go.Bar(
+                    x=list(fi.values()), y=list(fi.keys()),
+                    orientation='h',
+                    marker_color='#6366f1',
+                    text=[f"{v:.1%}" for v in fi.values()],
+                    textposition='outside',
+                    textfont={'color': '#e2e8f0'},
+                ))
+                fig_fi.update_layout(
+                    height=220, margin=dict(l=10, r=10, t=10, b=10),
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1a1a2e',
+                    xaxis={'gridcolor': '#334155', 'tickfont': {'color': '#94a3b8'}},
+                    yaxis={'tickfont': {'color': '#e2e8f0'}},
+                )
+                st.plotly_chart(fig_fi, use_container_width=True)
+
+        except Exception as e:
+            st.warning(f"LightGBM status unavailable: {e}")
+
+        if st.button("🚀 Train Ranking Model", key="train_lgbm", use_container_width=True):
+            with st.spinner("Training LightGBM LambdaRank model..."):
+                try:
+                    from backend.ai.ranking_model import get_ranking_model
+                    model = get_ranking_model()
+                    model.train_synthetic()
+                    st.success("✅ LightGBM ranking model trained and saved!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Training failed: {e}")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Feedback Stats ──
+    st.markdown("#### 🔄 Recruiter Feedback (Online Learning)")
+    try:
+        from backend.ai.feedback_store import get_feedback_store
+        fb = get_feedback_store()
+        fb_stats = fb.get_stats()
+        fb_cols = st.columns(4)
+        with fb_cols[0]:
+            st.metric("Total Feedback", fb_stats.get("total", 0))
+        with fb_cols[1]:
+            st.metric("Unique Candidates", fb_stats.get("unique_candidates", 0))
+        with fb_cols[2]:
+            st.metric("Unique Jobs", fb_stats.get("unique_jobs", 0))
+        with fb_cols[3]:
+            actions = fb_stats.get("actions", {})
+            st.metric("Shortlisted", actions.get("shortlisted", 0))
+
+        if fb_stats.get("total", 0) > 0:
+            with st.expander("📋 Action Distribution"):
+                import pandas as pd
+                action_df = pd.DataFrame(
+                    list(fb_stats["actions"].items()),
+                    columns=["Action", "Count"]
+                )
+                st.dataframe(action_df, use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.info(f"Feedback store: {e}")
+
+    # ── Live Signal Fetch ──
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("#### 🌐 Live Signal Collection")
+    if st.button("📡 Fetch Live GitHub Signals for Sample Candidates", use_container_width=True):
+        with st.spinner("Fetching live GitHub data..."):
+            try:
+                from backend.ai.github_collector import get_github_collector
+                collector = get_github_collector()
+                if not collector.is_available:
+                    st.warning("Set GITHUB_TOKEN in .env to enable live GitHub data")
+                else:
+                    rate = collector.get_rate_limit()
+                    st.info(
+                        f"GitHub API: {rate.get('remaining', '?')}/{rate.get('limit', '?')} "
+                        f"requests remaining (resets: {rate.get('reset_at', '?')})"
+                    )
+            except Exception as e:
+                st.error(f"GitHub collector error: {e}")
 
 # ── Tab 1: Score Weights ──────────────────────────────────────────────────────
 with tab1:
@@ -312,17 +516,17 @@ with tab4:
         },
         {
             "phase": "Phase 2 — AI Integration",
-            "status": "🔄 In Progress",
-            "color": "#f59e0b",
+            "status": "✅ Complete",
+            "color": "#10b981",
             "items": [
-                "🔄 LangGraph multi-agent orchestration",
-                "🔄 Sentence Transformers semantic matching",
-                "🔄 LLM-powered Copilot (Llama 3)",
-                "🔄 GitHub API real-time signal collection",
-                "🔄 LeetCode / Kaggle API integration",
-                "⏳ ChromaDB vector search for skill similarity",
-                "⏳ LightGBM ranking model training",
-                "⏳ Online learning from recruiter feedback",
+                "✅ LangGraph multi-agent orchestration",
+                "✅ Sentence Transformers semantic matching",
+                "✅ LLM-powered Copilot (Llama 3 via Groq)",
+                "✅ GitHub API real-time signal collection",
+                "✅ LeetCode / Kaggle API integration",
+                "✅ ChromaDB vector search for skill similarity",
+                "✅ LightGBM LambdaRank model training",
+                "✅ Online learning from recruiter feedback",
             ]
         },
         {

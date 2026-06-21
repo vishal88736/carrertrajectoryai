@@ -1,12 +1,19 @@
 """
 CareerTrajectory AI — Core Scoring Engine
 Implements FPS, Career Momentum, Semantic Fit, and Behavioral Evidence scoring.
+
+Phase 2: Integrated with AI subsystems:
+  - Sentence Transformers for semantic fit
+  - ChromaDB for vector search
+  - Live GitHub / LeetCode / Kaggle API collectors
+  - LightGBM LambdaRank for ML-based FPS prediction
 """
 
 import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any, Tuple
 import math
+from loguru import logger
 
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -166,10 +173,39 @@ def compute_career_momentum(skill_history: List[Dict], job_required_skills: List
 def compute_semantic_fit(candidate_skills: List[str], job_required_skills: List[str],
                          job_good_to_have: List[str] = None) -> float:
     """
-    Computes semantic fit using skill overlap + domain proximity.
-    In production: use SkillBERT / Sentence Transformers.
-    Here: lexical + domain similarity for speed.
+    Computes semantic fit using Sentence Transformers embeddings (Phase 2).
+    Falls back to lexical + domain similarity if embeddings unavailable.
     """
+    if not candidate_skills or not job_required_skills:
+        return 0.0
+
+    # ── Phase 2: Try Sentence Transformer embeddings first ──
+    try:
+        from backend.ai.embeddings import get_embedder
+        embedder = get_embedder()
+        if embedder.is_available:
+            all_job_skills = list(job_required_skills) + list(job_good_to_have or [])
+            semantic_score = embedder.compute_semantic_similarity(
+                candidate_skills, all_job_skills
+            )
+            if semantic_score >= 0:  # -1 signals fallback needed
+                # Blend with lexical overlap for robustness
+                lexical_score = _lexical_semantic_fit(
+                    candidate_skills, job_required_skills, job_good_to_have
+                )
+                # 70% embedding, 30% lexical
+                blended = 0.70 * semantic_score + 0.30 * lexical_score
+                return round(min(blended, 1.0), 4)
+    except Exception as e:
+        logger.debug(f"Embedding semantic fit failed, using lexical fallback: {e}")
+
+    # ── Fallback: lexical + domain similarity ──
+    return _lexical_semantic_fit(candidate_skills, job_required_skills, job_good_to_have)
+
+
+def _lexical_semantic_fit(candidate_skills: List[str], job_required_skills: List[str],
+                           job_good_to_have: List[str] = None) -> float:
+    """Original lexical skill overlap + domain proximity scoring."""
     if not candidate_skills or not job_required_skills:
         return 0.0
 
@@ -197,11 +233,24 @@ def compute_semantic_fit(candidate_skills: List[str], job_required_skills: List[
 
 # ─── Behavioral Evidence Score ────────────────────────────────────────────────
 
-def compute_behavioral_evidence(signals: Dict[str, Any]) -> float:
+def compute_behavioral_evidence(
+    signals: Dict[str, Any],
+    live_fetch: bool = False,
+    github_username: str = "",
+    leetcode_username: str = "",
+    kaggle_username: str = "",
+) -> float:
     """
     Aggregates behavioral evidence from GitHub, LeetCode, Kaggle, etc.
+    Phase 2: Optionally fetches live data from APIs before scoring.
     Returns a score in [0, 1].
     """
+    # ── Phase 2: Live API data refresh ──
+    if live_fetch:
+        signals = _refresh_live_signals(
+            dict(signals), github_username, leetcode_username, kaggle_username
+        )
+
     score_components = []
 
     # GitHub signals
@@ -271,6 +320,53 @@ def compute_behavioral_evidence(signals: Dict[str, Any]) -> float:
     final_score = weighted_sum / total_weight
 
     return round(min(final_score, 1.0), 4)
+
+
+def _refresh_live_signals(
+    signals: Dict, github_username: str,
+    leetcode_username: str, kaggle_username: str,
+) -> Dict:
+    """Fetch live data from GitHub/LeetCode/Kaggle and merge into signals."""
+    # GitHub
+    if github_username:
+        try:
+            from backend.ai.github_collector import get_github_collector
+            collector = get_github_collector()
+            if collector.is_available:
+                live_gh = collector.compute_github_signals(github_username)
+                if live_gh:
+                    signals["github"] = live_gh
+                    logger.debug(f"Live GitHub data for {github_username}: {live_gh.get('public_repos', 0)} repos")
+        except Exception as e:
+            logger.debug(f"Live GitHub fetch failed: {e}")
+
+    # LeetCode
+    if leetcode_username:
+        try:
+            from backend.ai.leetcode_collector import get_leetcode_collector
+            collector = get_leetcode_collector()
+            if collector.is_available:
+                live_lc = collector.compute_leetcode_signals(leetcode_username)
+                if live_lc:
+                    signals["leetcode"] = live_lc
+                    logger.debug(f"Live LeetCode data for {leetcode_username}: {live_lc.get('problems_solved', 0)} solved")
+        except Exception as e:
+            logger.debug(f"Live LeetCode fetch failed: {e}")
+
+    # Kaggle
+    if kaggle_username:
+        try:
+            from backend.ai.kaggle_collector import get_kaggle_collector
+            collector = get_kaggle_collector()
+            if collector.is_available:
+                live_kg = collector.compute_kaggle_signals(kaggle_username)
+                if live_kg:
+                    signals["kaggle"] = live_kg
+                    logger.debug(f"Live Kaggle data for {kaggle_username}")
+        except Exception as e:
+            logger.debug(f"Live Kaggle fetch failed: {e}")
+
+    return signals
 
 
 # ─── Contextual Intelligence Score ────────────────────────────────────────────
@@ -428,9 +524,10 @@ def _explain_gem(c: Dict, yoe: float, momentum: float, behavioral: float, semant
 
 # ─── Ranking Pipeline ─────────────────────────────────────────────────────────
 
-def rank_candidates(candidates: List[Dict], job: Dict) -> List[Dict]:
+def rank_candidates(candidates: List[Dict], job: Dict, use_ml: bool = False) -> List[Dict]:
     """
     Full ranking pipeline: computes all scores and sorts by FPS.
+    Phase 2: Optionally uses LightGBM ML ranking and indexes into ChromaDB.
     """
     ranked = []
     for c in candidates:
@@ -456,9 +553,36 @@ def rank_candidates(candidates: List[Dict], job: Dict) -> List[Dict]:
         }
         ranked.append(c_copy)
 
+    # ── Phase 2: ML-based FPS override ──
+    if use_ml:
+        try:
+            from backend.ai.ranking_model import get_ranking_model
+            model = get_ranking_model()
+            if model.is_available:
+                ml_scores = model.predict_batch(ranked, job)
+                for c, ml_fps in zip(ranked, ml_scores):
+                    if ml_fps >= 0:
+                        c["scores"]["fps_formula"] = c["scores"]["fps"]  # Keep original
+                        c["scores"]["fps"] = ml_fps
+                        c["scores"]["ranking_method"] = "lightgbm"
+                    else:
+                        c["scores"]["ranking_method"] = "formula"
+                logger.debug(f"ML ranking applied to {len(ranked)} candidates")
+        except Exception as e:
+            logger.debug(f"ML ranking failed, using formula: {e}")
+
     ranked.sort(key=lambda x: x["scores"]["fps"], reverse=True)
     for i, c in enumerate(ranked):
         c["rank"] = i + 1
+
+    # ── Phase 2: Index into ChromaDB for vector search ──
+    try:
+        from backend.ai.vector_store import get_vector_store
+        store = get_vector_store()
+        if store.is_available:
+            store.upsert_candidates_batch(ranked)
+    except Exception as e:
+        logger.debug(f"ChromaDB indexing skipped: {e}")
 
     return ranked
 

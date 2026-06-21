@@ -1,6 +1,9 @@
 """
 CareerTrajectory AI — Page 7: Recruiter Copilot
 AI-powered natural language assistant for recruiter queries.
+
+Phase 2: Powered by LangGraph multi-agent orchestration + Llama 3 (Groq).
+Falls back to template-based responses when LLM is unavailable.
 """
 
 import streamlit as st
@@ -24,6 +27,8 @@ if "copilot_history" not in st.session_state:
     st.session_state.copilot_history = []
 if "custom_candidates" not in st.session_state:
     st.session_state.custom_candidates = []
+if "copilot_ai_mode" not in st.session_state:
+    st.session_state.copilot_ai_mode = True
 
 candidates = get_candidates() + st.session_state.custom_candidates
 job = get_job_by_id(st.session_state.selected_job_id)
@@ -35,13 +40,90 @@ render_page_header("Recruiter Copilot",
     "🤖")
 
 
+# ── AI Status Bar ──────────────────────────────────────────────────────────────
+
+def _get_ai_status():
+    """Check which AI systems are available."""
+    status = {"llm": False, "langgraph": False, "embeddings": False, "chromadb": False}
+    try:
+        from backend.ai.llm_client import get_llm_client
+        status["llm"] = get_llm_client().is_available
+    except Exception:
+        pass
+    try:
+        from backend.ai.orchestrator import get_orchestrator
+        orch = get_orchestrator()
+        status["langgraph"] = orch._graph is not None
+    except Exception:
+        pass
+    try:
+        from backend.ai.embeddings import get_embedder
+        status["embeddings"] = get_embedder().is_available
+    except Exception:
+        pass
+    try:
+        from backend.ai.vector_store import get_vector_store
+        status["chromadb"] = get_vector_store().is_available
+    except Exception:
+        pass
+    return status
+
+ai_status = _get_ai_status()
+
+# AI mode toggle
+col_toggle, col_status = st.columns([1, 3])
+with col_toggle:
+    st.session_state.copilot_ai_mode = st.toggle(
+        "🧠 AI Mode",
+        value=st.session_state.copilot_ai_mode,
+        help="Toggle between AI-powered (Llama 3) and template-based responses"
+    )
+
+with col_status:
+    indicators = []
+    indicators.append(f"{'🟢' if ai_status['llm'] else '🔴'} LLM (Llama 3)")
+    indicators.append(f"{'🟢' if ai_status['langgraph'] else '🟡'} LangGraph")
+    indicators.append(f"{'🟢' if ai_status['embeddings'] else '🟡'} Embeddings")
+    indicators.append(f"{'🟢' if ai_status['chromadb'] else '🟡'} ChromaDB")
+    st.markdown(
+        f"<div style='color:#64748b;font-size:0.78rem;padding-top:0.5rem;'>"
+        f"{'  ·  '.join(indicators)}</div>",
+        unsafe_allow_html=True
+    )
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+
 # ── Copilot Engine ─────────────────────────────────────────────────────────────
 
-def generate_copilot_response(query: str, ranked_candidates, job_data, hidden_gems) -> str:
+def generate_copilot_response(query: str, ranked_candidates, job_data, hidden_gems) -> dict:
     """
-    Simulates a multi-agent AI copilot response.
-    Parses candidate names from natural language queries and performs dynamic comparisons.
+    Routes query through AI orchestrator (Phase 2) or template engine.
+    Returns: {"response": str, "intent": str, "agent_trace": list}
     """
+    # ── Phase 2: AI-powered response ──
+    if st.session_state.copilot_ai_mode:
+        try:
+            from backend.ai.orchestrator import get_orchestrator
+            orchestrator = get_orchestrator()
+            result = orchestrator.process_query(
+                query=query,
+                candidates=ranked_candidates,
+                job=job_data,
+                hidden_gems=hidden_gems,
+            )
+            if result.get("response"):
+                return result
+        except Exception as e:
+            pass  # Fall through to template
+
+    # ── Template-based fallback ──
+    response = _template_response(query, ranked_candidates, job_data, hidden_gems)
+    return {"response": response, "intent": "TEMPLATE", "agent_trace": ["📝 Template Engine"]}
+
+
+def _template_response(query: str, ranked_candidates, job_data, hidden_gems) -> str:
+    """Original template-based copilot response (Phase 1 logic)."""
     query_lower = query.lower()
     top = ranked_candidates[0] if ranked_candidates else None
     
@@ -153,15 +235,15 @@ FPS = 0.35 × Semantic Fit
     + 0.15 × Contextual Intelligence
 ```
 
-**Component Details:**
+**Phase 2 AI Enhancements:**
 
-- **Semantic Fit (35%)**: Measures skill alignment using semantic matching (SkillBERT-style). Accounts for direct matches AND domain proximity.
+- **Semantic Fit**: Now uses **Sentence Transformers** (all-MiniLM-L6-v2) for real embedding-based skill matching. 70% neural similarity + 30% lexical overlap.
   
-- **Career Momentum (30%)**: `√(Velocity × Direction Alignment)`. Velocity = skills/6 months. Direction = how well recent skills align with job domain.
+- **Career Momentum**: `√(Velocity × Direction Alignment)`. Velocity = skills/6 months. Direction = how well recent skills align with job domain.
 
-- **Behavioral Evidence (20%)**: Aggregated signals from GitHub, LeetCode, Kaggle, Codeforces, open-source contributions, certifications.
+- **Behavioral Evidence**: Can fetch **live data** from GitHub API, LeetCode GraphQL, and Kaggle API for real-time signals.
 
-- **Contextual Intelligence (15%)**: Experience level fit, education relevance, domain consistency.
+- **ML Ranking**: Optional **LightGBM LambdaRank** model can be trained from recruiter feedback to learn optimal ranking.
 
 **Key Innovation**: Career Momentum heavily rewards fast learners going in the right direction — even with less experience.
 """
@@ -183,7 +265,7 @@ Currently analyzing **{len(ranked_candidates)} candidates** for **{job_data['tit
 - "Explain how the FPS score is computed"
 - "Who should I recommend for this role?"
 
-*In production, this copilot connects to LangGraph + LLaMA 3 / GPT-4 for advanced reasoning.*
+*{'🧠 AI Mode: ON — powered by LangGraph + Llama 3' if st.session_state.copilot_ai_mode else '📝 Template Mode — set GROQ_API_KEY for AI-powered responses'}*
 """
 
 
@@ -209,9 +291,13 @@ for i, sug in enumerate(suggestions[:8]):
             st.session_state.copilot_history.append({
                 "role": "user", "content": sug, "time": datetime.now().strftime("%H:%M")
             })
-            response = generate_copilot_response(sug, ranked, job, gems)
+            result = generate_copilot_response(sug, ranked, job, gems)
             st.session_state.copilot_history.append({
-                "role": "assistant", "content": response, "time": datetime.now().strftime("%H:%M")
+                "role": "assistant", 
+                "content": result["response"],
+                "intent": result.get("intent", ""),
+                "agent_trace": result.get("agent_trace", []),
+                "time": datetime.now().strftime("%H:%M")
             })
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -222,15 +308,19 @@ with chat_container:
     st.markdown("### 💬 Chat with Copilot")
     
     if not st.session_state.copilot_history:
-        st.markdown("""
+        ai_badge = "🧠 LangGraph + Llama 3" if ai_status["llm"] else "📝 Template Engine"
+        st.markdown(f"""
         <div style="text-align:center;padding:2rem;background:#1a1a2e;
              border-radius:16px;border:1px solid #334155;">
             <div style="font-size:2.5rem;margin-bottom:0.7rem;">🤖</div>
             <div style="font-weight:700;color:#a5b4fc;margin-bottom:0.4rem;">
                 Recruiter Copilot is ready!
             </div>
-            <div style="color:#64748b;font-size:0.88rem;">
+            <div style="color:#64748b;font-size:0.88rem;margin-bottom:0.5rem;">
                 Ask anything about your {len(ranked)} candidates for {job['title']}.
+            </div>
+            <div style="color:#475569;font-size:0.75rem;">
+                Powered by {ai_badge}
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -256,6 +346,16 @@ with chat_container:
             # Render markdown properly
             with st.chat_message("assistant", avatar="🤖"):
                 st.markdown(msg["content"])
+                
+                # Show agent trace if available
+                trace = msg.get("agent_trace", [])
+                intent = msg.get("intent", "")
+                if trace or intent:
+                    with st.expander("🔬 Agent Trace", expanded=False):
+                        if intent:
+                            st.markdown(f"**Intent:** `{intent}`")
+                        if trace:
+                            st.markdown(f"**Pipeline:** {' → '.join(trace)}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -266,9 +366,13 @@ if user_input:
         "role": "user", "content": user_input, "time": datetime.now().strftime("%H:%M")
     })
     with st.spinner("🤖 Copilot is thinking..."):
-        response = generate_copilot_response(user_input, ranked, job, gems)
+        result = generate_copilot_response(user_input, ranked, job, gems)
     st.session_state.copilot_history.append({
-        "role": "assistant", "content": response, "time": datetime.now().strftime("%H:%M")
+        "role": "assistant",
+        "content": result["response"],
+        "intent": result.get("intent", ""),
+        "agent_trace": result.get("agent_trace", []),
+        "time": datetime.now().strftime("%H:%M")
     })
     st.rerun()
 
@@ -281,13 +385,13 @@ with col_clear:
 
 # Copilot capabilities
 st.markdown("---")
-st.markdown("### 🔬 Copilot Architecture")
+st.markdown("### 🔬 Copilot Architecture — Phase 2 AI")
 cap_cols = st.columns(4)
 capabilities = [
-    ("🧠", "Multi-Agent Reasoning", "Routes queries to specialized sub-agents for Career Momentum, Behavioral, and Semantic analysis."),
-    ("📊", "SHAP Attribution", "Explains ranking decisions using feature attribution scores for full transparency."),
-    ("💬", "NLP Understanding", "Parses natural language recruiter queries and maps to structured data operations."),
-    ("🔄", "Continuous Learning", "Learns from recruiter feedback to improve future recommendations."),
+    ("🧠", "LangGraph Orchestrator", "Routes queries through Router → Analysis → Search → Response agents using LangGraph state machine."),
+    ("🦙", "Llama 3 (Groq)", "70B parameter LLM for natural language understanding and recruiter-specific analysis generation."),
+    ("🔍", "Semantic Search", "Sentence Transformers + ChromaDB vector search for finding candidates by skill similarity."),
+    ("📊", "Live Signals", "Real-time GitHub, LeetCode, and Kaggle API integration for behavioral evidence."),
 ]
 for col, (icon, title, desc) in zip(cap_cols, capabilities):
     with col:
@@ -298,3 +402,23 @@ for col, (icon, title, desc) in zip(cap_cols, capabilities):
             <div style="color:#64748b;font-size:0.78rem;line-height:1.5;">{desc}</div>
         </div>
         """, unsafe_allow_html=True)
+
+# LLM Metrics (if available)
+if ai_status["llm"]:
+    try:
+        from backend.ai.llm_client import get_llm_client
+        metrics = get_llm_client().get_metrics()
+        if metrics["calls"] > 0:
+            st.markdown("---")
+            st.markdown("### 📈 AI Session Metrics")
+            m_cols = st.columns(4)
+            with m_cols[0]:
+                st.metric("LLM Calls", metrics["calls"])
+            with m_cols[1]:
+                st.metric("Total Tokens", metrics["tokens"]["total"])
+            with m_cols[2]:
+                st.metric("Avg Latency", f"{metrics['avg_latency']:.1f}s")
+            with m_cols[3]:
+                st.metric("Model", metrics["model"].split("/")[-1][:20])
+    except Exception:
+        pass
