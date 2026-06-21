@@ -38,6 +38,16 @@ render_page_header(
 )
 
 # ── Upload Resume Section ─────────────────────────────────────────────────────
+
+# Show persistent success message from previous upload (survives st.rerun)
+if st.session_state.get("_upload_success"):
+    msg = st.session_state._upload_success
+    st.success(f"✅ Successfully parsed & ranked **{msg['name']}** — found **{msg['skills_count']}** skills, "
+               f"**{msg['yoe']}** years experience, **{msg['certs']}** certifications!")
+    if st.button("✕ Dismiss", key="dismiss_upload_success"):
+        del st.session_state._upload_success
+        st.rerun()
+
 with st.expander("📤 Upload New Resume to Rank", expanded=False):
     st.markdown("""
     <div class="info-box">
@@ -63,38 +73,58 @@ with st.expander("📤 Upload New Resume to Rank", expanded=False):
             file_type = uploaded_file.name.split(".")[-1]
             parsed = parse_resume(file_bytes, file_type)
 
-            if manual_name:
-                parsed["name"] = manual_name
-            if manual_location:
-                parsed["location"] = manual_location
+            # ── Check for parse errors ──
+            if "error" in parsed:
+                st.error(f"❌ **Resume Parsing Failed:** {parsed['error']}")
+                st.markdown("""
+                <div style="background:#1a1a2e;border:1px solid #ef4444;border-radius:10px;
+                     padding:1rem;margin-top:0.5rem;">
+                    <strong style="color:#f87171;">💡 Troubleshooting Tips:</strong>
+                    <ul style="color:#94a3b8;font-size:0.85rem;margin-top:0.5rem;">
+                        <li>Make sure the PDF is text-based, not a scanned image</li>
+                        <li>Try saving your resume as a different format (PDF → DOCX or TXT)</li>
+                        <li>Ensure the file isn't password-protected or corrupted</li>
+                        <li>Try a plain text (.txt) version of your resume</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                if manual_name:
+                    parsed["name"] = manual_name
+                if manual_location:
+                    parsed["location"] = manual_location
 
-            # Build a candidate object from parsed data
-            new_candidate = {
-                "id": f"c_upload_{len(st.session_state.custom_candidates)+1}",
-                "name": parsed.get("name", "Uploaded Candidate"),
-                "email": parsed.get("email", ""),
-                "location": parsed.get("location", "Unknown"),
-                "years_of_experience": parsed.get("years_of_experience", 0),
-                "education": parsed.get("education", []),
-                "skills": parsed.get("skills", {"current": [], "learning": [], "history": []}),
-                "certifications": parsed.get("certifications", []),
-                "experience": [],
-                "projects": [],
-                "behavioral_signals": {},
-                "scores": {"semantic_fit": 0, "career_momentum": 0, "behavioral_evidence": 0,
-                           "contextual_intelligence": 0, "fps": 0},
-                "hidden_gem": False,
-            }
+                # Build a candidate object from parsed data
+                new_candidate = {
+                    "id": f"c_upload_{len(st.session_state.custom_candidates)+1}",
+                    "name": parsed.get("name", "Uploaded Candidate"),
+                    "email": parsed.get("email", ""),
+                    "location": parsed.get("location", "Unknown"),
+                    "years_of_experience": parsed.get("years_of_experience", 0),
+                    "education": parsed.get("education", []),
+                    "skills": parsed.get("skills", {"current": [], "learning": [], "history": []}),
+                    "certifications": parsed.get("certifications", []),
+                    "experience": [],
+                    "projects": [],
+                    "behavioral_signals": {
+                        "certifications_count": len(parsed.get("certifications", [])),
+                    },
+                    "scores": {"semantic_fit": 0, "career_momentum": 0, "behavioral_evidence": 0,
+                               "contextual_intelligence": 0, "fps": 0},
+                    "hidden_gem": False,
+                }
 
-            st.session_state.custom_candidates.append(new_candidate)
-            st.success(f"✅ Successfully parsed resume for **{new_candidate['name']}**!")
-            st.json({
-                "Name": new_candidate["name"],
-                "Skills Found": new_candidate["skills"]["current"][:10],
-                "Years of Exp": new_candidate["years_of_experience"],
-                "Certifications": len(new_candidate["certifications"]),
-            })
-            st.rerun()
+                st.session_state.custom_candidates.append(new_candidate)
+
+                # Store success info in session state so it survives rerun
+                st.session_state._upload_success = {
+                    "name": new_candidate["name"],
+                    "skills_count": len(new_candidate["skills"]["current"]),
+                    "yoe": new_candidate["years_of_experience"],
+                    "certs": len(new_candidate["certifications"]),
+                }
+
+                st.rerun()
 
 st.markdown("<br>", unsafe_allow_html=True)
 

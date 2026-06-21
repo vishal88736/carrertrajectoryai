@@ -17,6 +17,12 @@ except ImportError:
     PDF_AVAILABLE = False
 
 try:
+    import fitz  # PyMuPDF — more reliable PDF extraction
+    FITZ_AVAILABLE = True
+except ImportError:
+    FITZ_AVAILABLE = False
+
+try:
     from docx import Document
     DOCX_AVAILABLE = True
 except ImportError:
@@ -79,17 +85,36 @@ COMPANY_PATTERNS = [
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Extract text from a PDF file."""
-    if not PDF_AVAILABLE:
-        return ""
-    try:
-        reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text
-    except Exception:
-        return ""
+    """Extract text from a PDF file. Tries PyMuPDF first (more reliable), falls back to PyPDF2."""
+    text = ""
+
+    # Try PyMuPDF (fitz) first — handles more PDF formats reliably
+    if FITZ_AVAILABLE:
+        try:
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            for page in doc:
+                page_text = page.get_text()
+                if page_text:
+                    text += page_text + "\n"
+            doc.close()
+            if text.strip():
+                return text
+        except Exception:
+            text = ""  # Fall through to PyPDF2
+
+    # Fallback to PyPDF2
+    if PDF_AVAILABLE:
+        try:
+            reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:  # extract_text() can return None
+                    text += page_text + "\n"
+            return text
+        except Exception:
+            return ""
+
+    return ""
 
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
@@ -208,16 +233,23 @@ def parse_resume(file_bytes: bytes, file_type: str = "pdf") -> Dict[str, Any]:
     Main resume parsing function.
     Returns a structured candidate profile.
     """
+    if not file_bytes:
+        return {"error": "Empty file received. Please upload a valid resume."}
+
     # Extract text
     if file_type.lower() == "pdf":
+        if not PDF_AVAILABLE and not FITZ_AVAILABLE:
+            return {"error": "PDF parsing libraries not installed. Please install PyPDF2 or PyMuPDF."}
         text = extract_text_from_pdf(file_bytes)
     elif file_type.lower() in ("docx", "doc"):
+        if not DOCX_AVAILABLE:
+            return {"error": "DOCX parsing library not installed. Please install python-docx."}
         text = extract_text_from_docx(file_bytes)
     else:
         text = file_bytes.decode("utf-8", errors="ignore")
 
-    if not text.strip():
-        return {"error": "Could not extract text from resume"}
+    if not text or not text.strip():
+        return {"error": f"Could not extract text from the uploaded {file_type.upper()} file. The file may be scanned/image-based, corrupted, or password-protected."}
 
     # Extract all components
     contact = extract_contact_info(text)
