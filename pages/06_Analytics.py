@@ -20,6 +20,12 @@ import plotly.express as px
 import pandas as pd
 import numpy as np
 
+def hex_to_rgba(hex_color, alpha=0.13):
+    """Convert hex color to rgba format. Alpha defaults to 0.13 (approximately #22 opacity)."""
+    hex_color = hex_color.lstrip('#')
+    r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
 if "selected_job_id" not in st.session_state:
     st.session_state.selected_job_id = "j001"
 if "custom_candidates" not in st.session_state:
@@ -112,7 +118,7 @@ with tab1:
                 r=[v*100 for v in values] + [values[0]*100],
                 theta=cats + [cats[0]],
                 fill="toself",
-                fillcolor=colors_r[i % len(colors_r)] + "22",
+                fillcolor=hex_to_rgba(colors_r[i % len(colors_r)]),
                 line={"color": colors_r[i % len(colors_r)], "width": 2},
                 name=c["name"].split()[0],
                 opacity=0.8,
@@ -359,7 +365,7 @@ with tab3:
                     y=tier_vals,
                     box_visible=True,
                     meanline_visible=True,
-                    fillcolor=color + "33",
+                    fillcolor=hex_to_rgba(color, 0.2),
                     line_color=color,
                     opacity=0.8,
                 ))
