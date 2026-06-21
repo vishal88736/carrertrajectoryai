@@ -22,8 +22,10 @@ import pandas as pd
 # ── State ────────────────────────────────────────────────────────────────────
 if "selected_job_id" not in st.session_state:
     st.session_state.selected_job_id = "j001"
+if "custom_candidates" not in st.session_state:
+    st.session_state.custom_candidates = []
 
-candidates = get_candidates()
+candidates = get_candidates() + st.session_state.custom_candidates
 jobs = get_jobs()
 job = get_job_by_id(st.session_state.selected_job_id)
 ranked = rank_candidates(candidates, job)

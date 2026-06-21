@@ -37,94 +37,295 @@ render_page_header(
     "📊"
 )
 
+def map_candidate_json_to_internal(c: dict) -> dict:
+    import random
+    from datetime import datetime
+    profile = c.get("profile", {})
+    
+    # Map education
+    education = []
+    for edu in c.get("education", []):
+        degree = edu.get("degree", "")
+        field = edu.get("field_of_study", "")
+        full_degree = f"{degree} in {field}" if field else degree
+        education.append({
+            "degree": full_degree,
+            "institution": edu.get("institution", ""),
+            "year": edu.get("end_year", edu.get("start_year", ""))
+        })
+        
+    # Map career history to experience
+    experience = []
+    for job in c.get("career_history", []):
+        start = job.get("start_date", "")
+        if start:
+            start = start[:7] # YYYY-MM
+        end = job.get("end_date", "")
+        if end:
+            end = end[:7]
+        else:
+            end = "present" if job.get("is_current") else "Unknown"
+        experience.append({
+            "title": job.get("title", ""),
+            "company": job.get("company", ""),
+            "start": start,
+            "end": end,
+            "description": job.get("description", "")
+        })
+        
+    # Map skills
+    skills_list = c.get("skills", [])
+    current_skills = []
+    skills_history = []
+    for s in skills_list:
+        name = s.get("name", "")
+        if not name:
+            continue
+        current_skills.append(name)
+        # Construct history using duration_months
+        duration = s.get("duration_months", 0)
+        # Estimate acquired date
+        acq_year = 2026
+        acq_month = 6 - duration
+        while acq_month <= 0:
+            acq_month += 12
+            acq_year -= 1
+        skills_history.append({
+            "skill": name,
+            "acquired": f"{acq_year}-{acq_month:02d}"
+        })
+        
+    # Map certifications
+    certifications = []
+    for cert in c.get("certifications", []):
+        certifications.append({
+            "name": cert.get("name", ""),
+            "issuer": cert.get("issuer", "Unknown"),
+            "date": str(cert.get("year", ""))
+        })
+        
+    # Map behavioral signals from redrob_signals
+    redrob = c.get("redrob_signals", {})
+    behavioral_signals = {
+        "certifications_count": len(certifications),
+        "open_source_contributions": int(redrob.get("github_activity_score", 0) * 1.5) if redrob.get("github_activity_score", -1) > 0 else 0,
+        "stackoverflow_reputation": int(redrob.get("profile_completeness_score", 0) * 15)
+    }
+    
+    # Check github activity
+    github_score = redrob.get("github_activity_score", -1)
+    if github_score > 0:
+        behavioral_signals["github"] = {
+            "username": profile.get("anonymized_name", "user").lower().replace(" ", "") + "_dev",
+            "commit_frequency": github_score * 2.0,
+            "public_repos": int(github_score * 3),
+            "followers": int(github_score * 12),
+            "stars_earned": int(github_score * 45),
+            "streak_days": int(github_score * 25),
+            "top_languages": [s for s in current_skills[:3]]
+        }
+        
+    # Check leetcode / skill assessment scores
+    assessments = redrob.get("skill_assessment_scores", {})
+    if assessments:
+        avg_score = sum(assessments.values()) / len(assessments)
+        behavioral_signals["leetcode"] = {
+            "username": profile.get("anonymized_name", "user").lower().replace(" ", "") + "_codes",
+            "problems_solved": int(avg_score * 4.5),
+            "contest_rating": int(1000 + avg_score * 10),
+            "contest_rank_percentile": int(avg_score)
+        }
+        
+    # Projects: we can create some mock projects based on their headline & skills
+    projects = []
+    if current_skills:
+        # Create a mock project using top skills
+        proj_skills = current_skills[:3]
+        projects.append({
+            "name": f"Open Source {proj_skills[0]} Engine",
+            "description": f"A high-performance implementation of an engine focusing on {', '.join(proj_skills)}. Feature-rich and highly optimized.",
+            "skills": proj_skills,
+            "url": f"https://github.com/candidate/{proj_skills[0].lower()}-engine",
+            "stars": int(github_score * 10) if github_score > 0 else 0
+        })
+
+    # Assemble candidate
+    mapped = {
+        "id": c.get("candidate_id", f"c_json_{random.randint(1000, 9999)}"),
+        "name": profile.get("anonymized_name", "Anonymous Candidate"),
+        "email": f"{profile.get('anonymized_name', 'candidate').lower().replace(' ', '.')}@example.com",
+        "location": f"{profile.get('location', 'Unknown')}, {profile.get('country', '')}".strip(", "),
+        "years_of_experience": profile.get("years_of_experience", 0),
+        "education": education,
+        "skills": {
+            "current": current_skills,
+            "learning": current_skills[-3:] if len(current_skills) > 3 else [],
+            "history": skills_history
+        },
+        "experience": experience,
+        "certifications": certifications,
+        "projects": projects,
+        "behavioral_signals": behavioral_signals,
+        "scores": {"semantic_fit": 0, "career_momentum": 0, "behavioral_evidence": 0, "contextual_intelligence": 0, "fps": 0},
+        "hidden_gem": False
+    }
+    return mapped
+
 # ── Upload Resume Section ─────────────────────────────────────────────────────
 
 # Show persistent success message from previous upload (survives st.rerun)
 if st.session_state.get("_upload_success"):
     msg = st.session_state._upload_success
-    st.success(f"✅ Successfully parsed & ranked **{msg['name']}** — found **{msg['skills_count']}** skills, "
-               f"**{msg['yoe']}** years experience, **{msg['certs']}** certifications!")
+    if msg.get("is_json"):
+        st.success(f"✅ Successfully loaded and ranked **{msg['count']}** candidates from candidate JSON data!")
+    else:
+        st.success(f"✅ Successfully parsed & ranked **{msg['name']}** — found **{msg['skills_count']}** skills, "
+                   f"**{msg['yoe']}** years experience, **{msg['certs']}** certifications!")
     if st.button("✕ Dismiss", key="dismiss_upload_success"):
         del st.session_state._upload_success
         st.rerun()
 
-with st.expander("📤 Upload New Resume to Rank", expanded=False):
+with st.expander("📤 Upload New Resume or Candidate JSON", expanded=False):
     st.markdown("""
     <div class="info-box">
-        <strong>🤖 Resume Intelligence Agent</strong> — Upload a PDF or DOCX resume.
-        The AI will extract skills, parse timeline, compute FPS, and rank the candidate.
+        <strong>🤖 Resume & Candidate Intelligence Agent</strong> — Upload a PDF/DOCX/TXT resume or a structured candidate JSON file.
+        The AI will parse, map candidate schemas, compute FPS, and rank them.
     </div>
     """, unsafe_allow_html=True)
+
+    # ── Load sample candidate JSON button ──
+    st.markdown("##### ⚡ Quick Load Sample Candidates")
+    if st.button("📥 Load 50 Candidates from sample_candidates.json", key="load_sample_json_btn", use_container_width=True):
+        with st.spinner("Loading and mapping 50 sample candidates..."):
+            try:
+                import json
+                file_path = os.path.join(os.path.dirname(__file__), "..", "data", "sample_candidates.json")
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                if not isinstance(data, list):
+                    data = [data]
+                
+                added_count = 0
+                for c_data in data:
+                    new_candidate = map_candidate_json_to_internal(c_data)
+                    # Check if candidate_id already exists to avoid duplicates
+                    if not any(x["id"] == new_candidate["id"] for x in st.session_state.custom_candidates):
+                        st.session_state.custom_candidates.append(new_candidate)
+                        added_count += 1
+                
+                if added_count > 0:
+                    st.session_state._upload_success = {
+                        "is_json": True,
+                        "count": added_count
+                    }
+                    st.rerun()
+                else:
+                    st.info("ℹ️ 50 Candidates from sample_candidates.json are already loaded.")
+            except Exception as e:
+                st.error(f"❌ Failed to load local sample JSON: {str(e)}")
+
+    st.markdown("<hr style='border-color:#334155;margin:0.8rem 0;'>", unsafe_allow_html=True)
+    st.markdown("##### 📁 Upload Custom File")
 
     col_up1, col_up2 = st.columns([2, 1])
     with col_up1:
         uploaded_file = st.file_uploader(
-            "Drop resume here",
-            type=["pdf", "docx", "txt"],
-            help="Supports PDF, DOCX, and plain text resumes"
+            "Drop resume or candidate JSON here",
+            type=["pdf", "docx", "txt", "json"],
+            help="Supports PDF, DOCX, plain text resumes, or candidate JSON files"
         )
     with col_up2:
         manual_name = st.text_input("Candidate Name (optional)", placeholder="Auto-extracted from resume")
         manual_location = st.text_input("Location (optional)", placeholder="City, Country")
 
-    if uploaded_file and st.button("🚀 Parse & Rank Resume", use_container_width=True):
-        with st.spinner("🤖 Resume Intelligence Agent processing..."):
+    if uploaded_file and st.button("🚀 Parse & Rank Resume / JSON", use_container_width=True):
+        with st.spinner("🤖 Processing uploaded file..."):
             file_bytes = uploaded_file.read()
-            file_type = uploaded_file.name.split(".")[-1]
-            parsed = parse_resume(file_bytes, file_type)
-
-            # ── Check for parse errors ──
-            if "error" in parsed:
-                st.error(f"❌ **Resume Parsing Failed:** {parsed['error']}")
-                st.markdown("""
-                <div style="background:#1a1a2e;border:1px solid #ef4444;border-radius:10px;
-                     padding:1rem;margin-top:0.5rem;">
-                    <strong style="color:#f87171;">💡 Troubleshooting Tips:</strong>
-                    <ul style="color:#94a3b8;font-size:0.85rem;margin-top:0.5rem;">
-                        <li>Make sure the PDF is text-based, not a scanned image</li>
-                        <li>Try saving your resume as a different format (PDF → DOCX or TXT)</li>
-                        <li>Ensure the file isn't password-protected or corrupted</li>
-                        <li>Try a plain text (.txt) version of your resume</li>
-                    </ul>
-                </div>
-                """, unsafe_allow_html=True)
+            file_name = uploaded_file.name
+            file_type = file_name.split(".")[-1].lower()
+            
+            if file_type == "json":
+                try:
+                    import json
+                    data = json.loads(file_bytes.decode("utf-8"))
+                    if not isinstance(data, list):
+                        data = [data]
+                    
+                    added_count = 0
+                    for c_data in data:
+                        new_candidate = map_candidate_json_to_internal(c_data)
+                        if not any(x["id"] == new_candidate["id"] for x in st.session_state.custom_candidates):
+                            st.session_state.custom_candidates.append(new_candidate)
+                            added_count += 1
+                    
+                    st.session_state._upload_success = {
+                        "is_json": True,
+                        "count": added_count
+                    }
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Failed to parse JSON candidate file: {str(e)}")
             else:
-                if manual_name:
-                    parsed["name"] = manual_name
-                if manual_location:
-                    parsed["location"] = manual_location
-
-                # Build a candidate object from parsed data
-                new_candidate = {
-                    "id": f"c_upload_{len(st.session_state.custom_candidates)+1}",
-                    "name": parsed.get("name", "Uploaded Candidate"),
-                    "email": parsed.get("email", ""),
-                    "location": parsed.get("location", "Unknown"),
-                    "years_of_experience": parsed.get("years_of_experience", 0),
-                    "education": parsed.get("education", []),
-                    "skills": parsed.get("skills", {"current": [], "learning": [], "history": []}),
-                    "certifications": parsed.get("certifications", []),
-                    "experience": [],
-                    "projects": [],
-                    "behavioral_signals": {
-                        "certifications_count": len(parsed.get("certifications", [])),
-                    },
-                    "scores": {"semantic_fit": 0, "career_momentum": 0, "behavioral_evidence": 0,
-                               "contextual_intelligence": 0, "fps": 0},
-                    "hidden_gem": False,
-                }
-
-                st.session_state.custom_candidates.append(new_candidate)
-
-                # Store success info in session state so it survives rerun
-                st.session_state._upload_success = {
-                    "name": new_candidate["name"],
-                    "skills_count": len(new_candidate["skills"]["current"]),
-                    "yoe": new_candidate["years_of_experience"],
-                    "certs": len(new_candidate["certifications"]),
-                }
-
-                st.rerun()
+                parsed = parse_resume(file_bytes, file_type)
+                
+                # ── Check for parse errors ──
+                if "error" in parsed:
+                    st.error(f"❌ **Resume Parsing Failed:** {parsed['error']}")
+                    st.markdown("""
+                    <div style="background:#1a1a2e;border:1px solid #ef4444;border-radius:10px;
+                         padding:1rem;margin-top:0.5rem;">
+                        <strong style="color:#f87171;">💡 Troubleshooting Tips:</strong>
+                        <ul style="color:#94a3b8;font-size:0.85rem;margin-top:0.5rem;">
+                            <li>Make sure the PDF is text-based, not a scanned image</li>
+                            <li>Try saving your resume as a different format (PDF → DOCX or TXT)</li>
+                            <li>Ensure the file isn't password-protected or corrupted</li>
+                            <li>Try a plain text (.txt) version of your resume</li>
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    if manual_name:
+                        parsed["name"] = manual_name
+                    if manual_location:
+                        parsed["location"] = manual_location
+    
+                    # Build a candidate object from parsed data
+                    new_candidate = {
+                        "id": f"c_upload_{len(st.session_state.custom_candidates)+1}",
+                        "name": parsed.get("name", "Uploaded Candidate"),
+                        "email": parsed.get("email", ""),
+                        "location": parsed.get("location", "Unknown"),
+                        "years_of_experience": parsed.get("years_of_experience", 0),
+                        "education": parsed.get("education", []),
+                        "skills": parsed.get("skills", {"current": [], "learning": [], "history": []}),
+                        "certifications": parsed.get("certifications", []),
+                        "experience": parsed.get("experience", []),
+                        "projects": parsed.get("projects", []),
+                        "github_url": parsed.get("github_url", ""),
+                        "github_username": parsed.get("github_username", None),
+                        "behavioral_signals": {
+                            "certifications_count": len(parsed.get("certifications", [])),
+                            "github_active": parsed.get("behavioral_signals", {}).get("github_active", False),
+                            "has_projects": parsed.get("behavioral_signals", {}).get("has_projects", False),
+                            "has_certifications": parsed.get("behavioral_signals", {}).get("has_certifications", False),
+                        },
+                        "scores": {"semantic_fit": 0, "career_momentum": 0, "behavioral_evidence": 0,
+                                   "contextual_intelligence": 0, "fps": 0},
+                        "hidden_gem": False,
+                    }
+    
+                    st.session_state.custom_candidates.append(new_candidate)
+    
+                    # Store success info in session state so it survives rerun
+                    st.session_state._upload_success = {
+                        "name": new_candidate["name"],
+                        "skills_count": len(new_candidate["skills"]["current"]),
+                        "yoe": new_candidate["years_of_experience"],
+                        "certs": len(new_candidate["certifications"]),
+                    }
+    
+                    st.rerun()
 
 st.markdown("<br>", unsafe_allow_html=True)
 

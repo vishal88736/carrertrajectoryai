@@ -40,128 +40,81 @@ render_page_header("Recruiter Copilot",
 def generate_copilot_response(query: str, ranked_candidates, job_data, hidden_gems) -> str:
     """
     Simulates a multi-agent AI copilot response.
-    In production, this connects to LangGraph + LLM.
+    Parses candidate names from natural language queries and performs dynamic comparisons.
     """
     query_lower = query.lower()
     top = ranked_candidates[0] if ranked_candidates else None
     
+    # ── Dynamic Candidate Name Extraction ──────────────────────────────────
+    found_cands = []
+    for c in ranked_candidates:
+        first_name = c["name"].split()[0].lower()
+        full_name = c["name"].lower()
+        if full_name in query_lower or first_name in query_lower:
+            found_cands.append(c)
+            
+    # Remove duplicates if any
+    seen = set()
+    found_cands = [x for x in found_cands if not (x["id"] in seen or seen.add(x["id"]))]
+    
     # ── Pattern matching for common queries ──────────────────────────────────
     
-    # Why is X ranked above Y?
-    if "ranked above" in query_lower or "why is" in query_lower and "rank" in query_lower:
-        if len(ranked_candidates) >= 2:
+    # Why is X ranked above Y? / Compare
+    if "ranked above" in query_lower or "why is" in query_lower and "rank" in query_lower or "compare" in query_lower:
+        if len(found_cands) >= 2:
+            c1, c2 = found_cands[0], found_cands[1]
+        elif len(ranked_candidates) >= 2:
             c1, c2 = ranked_candidates[0], ranked_candidates[1]
-            fps_diff = c1["scores"]["fps"] - c2["scores"]["fps"]
-            mom_diff = c1["scores"]["career_momentum"] - c2["scores"]["career_momentum"]
-            response = f"""
-**🔍 Ranking Comparison: {c1['name']} (#1) vs {c2['name']} (#2)**
+        else:
+            return "Not enough candidates available to perform comparison."
+            
+        if c1["scores"]["fps"] < c2["scores"]["fps"]:
+            c1, c2 = c2, c1
+            
+        fps_diff = c1["scores"]["fps"] - c2["scores"]["fps"]
+        mom_diff = c1["scores"]["career_momentum"] - c2["scores"]["career_momentum"]
+        
+        response = f"""
+**🔍 Ranking Comparison: {c1['name']} (Rank #{c1.get('rank','?')}) vs {c2['name']} (Rank #{c2.get('rank','?')})**
 
-**{c1['name']}** ranks higher for the following reasons:
+**{c1['name']}** ranks higher than **{c2['name']}** for the following reasons:
 
 1. **Career Momentum** ({c1['scores']['career_momentum']:.2f} vs {c2['scores']['career_momentum']:.2f}): 
-   {c1['name'].split()[0]} is acquiring skills in the {job_data['domain']} domain at a significantly faster rate. 
+   {c1['name'].split()[0]} is acquiring skills in the {job_data['domain']} domain at a faster rate. 
    Their recent skill acquisitions — especially {', '.join(c1['skills']['current'][:3])} — 
    align strongly with the role's trajectory.
 
 2. **Behavioral Evidence** ({c1['scores']['behavioral_evidence']:.2f} vs {c2['scores']['behavioral_evidence']:.2f}):
    External platform signals (GitHub commits, open-source contributions, etc.) show that 
-   {c1['name'].split()[0]} has demonstrably higher technical activity.
+   {c1['name'].split()[0]} has higher technical activity.
 
 3. **FPS Delta**: {c1['name'].split()[0]} scores **{fps_diff:.3f} higher** in overall Future Potential Score.
 
-**📊 SHAP Attribution**: Career Momentum is the primary differentiator (+{mom_diff*0.3:.3f} to FPS gap).
+**📊 SHAP Attribution**: {"Career Momentum" if mom_diff >= 0 else "Semantic Fit"} is the primary differentiator (+{abs(mom_diff*0.3):.3f} to FPS gap).
 
 *Note: {c2['name'].split()[0]} may be a better fit if you prioritize {c2['scores']['contextual_intelligence']:.0%} contextual alignment (industry background).*
 """
-            return response
+        return response
 
-    # Hidden gems
-    if "hidden gem" in query_lower or "underrated" in query_lower or "missed" in query_lower:
-        if hidden_gems:
-            gem_names = ", ".join(g["name"] for g in hidden_gems[:3])
-            gem_details = "\n".join([
-                f"- **{g['name']}**: {g.get('years_of_experience',0)} yrs exp but {g['scores']['career_momentum']:.0%} momentum. "
-                f"Traditional ATS would rank them low due to experience. CareerTrajectory gives them #{g.get('rank','?')}."
-                for g in hidden_gems[:3]
-            ])
-            return f"""
-**💎 Hidden Gems Detected: {len(hidden_gems)} candidates**
-
-These candidates have high career momentum and strong behavioral evidence but would be missed by traditional ATS due to lower experience or keyword mismatch:
-
-{gem_details}
-
-**Why they're valuable:**
-These candidates are on steep learning curves. Based on their velocity of skill acquisition, they're likely to outperform more experienced candidates within 12-18 months.
-
-**Recommendation:** Schedule exploratory calls with {hidden_gems[0]['name']} first — they have the highest momentum ({hidden_gems[0]['scores']['career_momentum']:.0%}) in the pool.
-"""
-        else:
-            return "No hidden gems detected with current thresholds. Try adjusting detection sensitivity on the Hidden Gems page."
-
-    # Strongest learning velocity
-    if "learning velocity" in query_lower or "fastest learning" in query_lower or "highest velocity" in query_lower:
-        by_momentum = sorted(ranked_candidates, key=lambda c: c["scores"]["career_momentum"], reverse=True)[:3]
-        details = "\n".join([
-            f"- **{c['name']}** — Career Momentum: {c['scores']['career_momentum']:.2f} | "
-            f"Recently learning: {', '.join(c['skills'].get('learning', [])[:3])}"
-            for c in by_momentum
-        ])
+    # Single Candidate Deep-Dive query
+    if len(found_cands) == 1:
+        c = found_cands[0]
+        traj = predict_future_role(c)
         return f"""
-**🚀 Candidates with Highest Learning Velocity**
+**👤 Candidate Deep-Dive: {c['name']} (Rank #{c.get('rank','?')})**
 
-Career Velocity measures how quickly candidates acquire new skills. Direction Alignment measures whether those skills are heading toward your role's domain.
+- **FPS Score**: **{c['scores']['fps']:.3f}** (Future Potential Score)
+- **Semantic Fit**: {c['scores']['semantic_fit']:.2f}
+- **Career Momentum**: {c['scores']['career_momentum']:.2f}
+- **Behavioral Evidence**: {c['scores']['behavioral_evidence']:.2f}
+- **Contextual Intelligence**: {c['scores']['contextual_intelligence']:.2f}
 
-{details}
+**🔮 Predicted 5-Year Horizon:** {traj['trajectory']['5_years']} ({traj['momentum_tier']})
 
-**Top Performer:** {by_momentum[0]['name']} shows the strongest career momentum ({by_momentum[0]['scores']['career_momentum']:.2f}).
-Their skill acquisition is highly aligned with {job_data['domain']} requirements.
-
-*Career Momentum = √(Velocity × Direction Alignment)*
-"""
-
-    # Staff engineer potential
-    if "staff engineer" in query_lower or "principal" in query_lower or "leadership" in query_lower:
-        high_potential = [c for c in ranked_candidates if c["scores"]["fps"] > 0.75 and c["scores"]["career_momentum"] > 0.80]
-        if high_potential:
-            details = "\n".join([
-                f"- **{c['name']}** — FPS: {c['scores']['fps']:.3f} | Momentum: {c['scores']['career_momentum']:.2f} | "
-                f"Predicted 5yr: {c.get('predicted_trajectory', {}).get('5_years', 'Senior IC')}"
-                for c in high_potential[:3]
-            ])
-            return f"""
-**👑 Candidates with Staff/Principal Engineer Potential**
-
-Based on Career Momentum, Behavioral Evidence, and historical trajectory analysis:
-
-{details}
-
-**Methodology:** We predict Staff Engineer potential by combining:
-- Career Velocity > 0.8 (rapid skill acquisition)
-- Strong behavioral evidence (GitHub contributions, OSS, etc.)
-- Direction alignment with long-term technical leadership skills
-
-**Recommendation:** These candidates have high leadership probability and would benefit from clear growth paths in your organization.
-"""
-        return "No candidates currently match Staff Engineer potential criteria. The top candidate shows the most promise."
-
-    # Compare two named candidates
-    if "compare" in query_lower:
-        if len(ranked_candidates) >= 2:
-            c1, c2 = ranked_candidates[0], ranked_candidates[1]
-            return f"""
-**📊 Candidate Comparison: {c1['name']} vs {c2['name']}**
-
-| Dimension | {c1['name'].split()[0]} | {c2['name'].split()[0]} |
-|-----------|---------|---------|
-| FPS Score | **{c1['scores']['fps']:.3f}** | {c2['scores']['fps']:.3f} |
-| Semantic Fit | {c1['scores']['semantic_fit']:.2f} | {c2['scores']['semantic_fit']:.2f} |
-| Career Momentum | **{c1['scores']['career_momentum']:.2f}** | {c2['scores']['career_momentum']:.2f} |
-| Behavioral Evidence | {c1['scores']['behavioral_evidence']:.2f} | {c2['scores']['behavioral_evidence']:.2f} |
-| Years of Experience | {c1.get('years_of_experience',0)} | {c2.get('years_of_experience',0)} |
-
-**Summary:** {c1['name'].split()[0]} leads on Career Momentum and overall FPS. 
-{c2['name'].split()[0]} {'shows strong contextual alignment' if c2['scores']['contextual_intelligence'] > c1['scores']['contextual_intelligence'] else 'is a solid alternative'}.
+**Key Details:**
+- **Current Skills**: {', '.join(c['skills']['current'][:8])}
+- **Years of Experience**: {c.get('years_of_experience', 0)}
+- **Leadership Potential**: {traj['leadership_probability'] * 100:.0f}%
 """
 
     # Best candidate for this role
