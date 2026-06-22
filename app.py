@@ -58,7 +58,7 @@ st.markdown("""
 col1, col2, col3, col4, col5 = st.columns(5)
 
 stats = [
-    (col1, "7", "AI Agents", "🤖"),
+    (col1, "11", "AI Agents", "🤖"),
     (col2, "FPS™", "Future Potential Score", "📊"),
     (col3, "4D", "Scoring Dimensions", "🎯"),
     (col4, "SHAP", "Explainable AI", "🔍"),
@@ -186,17 +186,21 @@ with col_vs:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── 7 Agent Architecture ──────────────────────────────────────────────────────
+# ── 11 Agent Architecture ──────────────────────────────────────────────────────
 st.markdown("### 🤖 Multi-Agent Architecture")
 
 agents = [
-    ("📄", "Resume Intelligence", "Parses PDFs/DOCX. Extracts skills, projects, timelines, achievements."),
-    ("💼", "Job Intelligence", "Understands JD semantics. Creates requirement graphs for matching."),
-    ("🚀", "Career Momentum", "Computes velocity × alignment. Identifies growth direction."),
-    ("🔬", "Behavior Validator", "Validates GitHub, Kaggle, LeetCode, Codeforces signals."),
-    ("🏆", "Talent Ranker", "Combines all signals → FPS. Uses LightGBM/LambdaMART."),
-    ("🔍", "Explainability", "SHAP explanations, counterfactuals, recruiter-friendly insights."),
-    ("💬", "Recruiter Copilot", "Natural language Q&A about candidates. Hidden gem discovery."),
+    ("📄", "Resume Intelligence", "Parse • Skills • Experience • Projects → Structured Candidate Profile"),
+    ("💼", "Job Intelligence", "JD • Required/Preferred Skills • Seniority → Job Requirement Graph"),
+    ("🔗", "Knowledge Graph", "Candidate • Job • Skill • Domain Relationships → Talent Knowledge Graph"),
+    ("🧠", "Semantic Intelligence", "BGE-M3 • Reranker • Transferable Skills → Semantic Fit Score"),
+    ("🚀", "Career Trajectory", "Velocity • Momentum • Direction Alignment → Career Trajectory Score"),
+    ("🔬", "Talent Validation", "Builder • Depth • Problem Solving • OSS Impact → Validation Score"),
+    ("🔮", "Future Prediction", "Leadership • Growth Accel • Breakout → Future Potential Score"),
+    ("💎", "Hidden Gem Detection", "Underestimated • High Upside • Outperformer → Hidden Gem Score"),
+    ("🏆", "FPS Ranking Engine", "Aggregate • FPS • Compare • Final Rank → Ranked Candidate Pool"),
+    ("🔍", "Explainability", "SHAP • Feature Attribution • Counterfactuals → Explainable AI Reports"),
+    ("💬", "Recruiter Copilot", "NL Search • Compare • Insights Powered by Groq Llama"),
 ]
 
 agent_cols = st.columns(4)
@@ -204,10 +208,10 @@ for i, (icon, name, desc) in enumerate(agents):
     col = agent_cols[i % 4]
     with col:
         st.markdown(f"""
-        <div class="ct-card" style="padding:1.2rem; text-align:center; min-height:160px;">
+        <div class="ct-card" style="padding:1.2rem; text-align:center; min-height:160px; margin-bottom:1rem;">
             <div style="font-size:1.8rem; margin-bottom:0.5rem;">{icon}</div>
             <div style="font-weight:700; color:#a5b4fc; font-size:0.9rem; margin-bottom:0.4rem;">
-                Agent {i+1}: {name}
+                Agent {i+1:02d}: {name}
             </div>
             <div style="color:#64748b; font-size:0.78rem; line-height:1.5;">{desc}</div>
         </div>
