@@ -39,6 +39,15 @@ render_page_header("Recruiter Copilot",
     "Ask anything about your candidate pool in natural language. AI-powered insights.",
     "🤖")
 
+if not ranked:
+    st.markdown("""
+    <div class="info-box" style="text-align:center; margin-top:2rem;">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">📥</div>
+        <strong>No candidates available.</strong>
+        <div style="color:#64748b; margin-top:0.3rem;">Upload a resume or JSON to use the Copilot, or enable Sample Data in the sidebar.</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
 # ── AI Status Bar ──────────────────────────────────────────────────────────────
 

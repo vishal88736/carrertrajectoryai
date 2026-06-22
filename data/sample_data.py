@@ -632,7 +632,19 @@ SAMPLE_JOBS = [
 
 
 def get_candidates():
-    return SAMPLE_CANDIDATES
+    try:
+        import streamlit as st
+        from streamlit.runtime import exists
+        if not exists():
+            return SAMPLE_CANDIDATES
+            
+        # Only return sample candidates if explicitly toggled on
+        if st.session_state.get("use_sample_data", False):
+            return SAMPLE_CANDIDATES
+        return []
+    except Exception:
+        # Fallback for non-streamlit scripts
+        return SAMPLE_CANDIDATES
 
 
 def get_jobs():

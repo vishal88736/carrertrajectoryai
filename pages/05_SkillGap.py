@@ -42,6 +42,16 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+if not ranked:
+    st.markdown("""
+    <div class="info-box" style="text-align:center; margin-top:2rem;">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">📥</div>
+        <strong>No candidates available.</strong>
+        <div style="color:#64748b; margin-top:0.3rem;">Upload a resume or JSON to simulate skill gaps, or enable Sample Data in the sidebar.</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
 # ── Candidate & Skill Selection ───────────────────────────────────────────────
 st.markdown("### 1️⃣ Select Candidate")
 cand_options = {c["id"]: f"#{c.get('rank','?')} · {c['name']} (FPS: {c['scores']['fps']:.3f})"

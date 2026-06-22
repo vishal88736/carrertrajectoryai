@@ -52,6 +52,16 @@ with st.expander("🔄 Switch Candidate", expanded=False):
     st.session_state.selected_candidate_id = selected_id
 
 # Get selected candidate with fresh scores
+if not ranked:
+    st.markdown("""
+    <div class="info-box" style="text-align:center; margin-top:2rem;">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">📥</div>
+        <strong>No candidates available.</strong>
+        <div style="color:#64748b; margin-top:0.3rem;">Upload a resume or JSON to view a profile, or enable Sample Data in the sidebar.</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
 cand = next((c for c in ranked if c["id"] == st.session_state.selected_candidate_id), ranked[0])
 scores = cand["scores"]
 fps = scores["fps"]
@@ -68,24 +78,18 @@ render_page_header(
 hero_col, gauge_col, stats_col = st.columns([2, 1.2, 1.8])
 
 with hero_col:
+    gem_badge = '<span style="background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#000;font-size:0.72rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:999px;">💎 Hidden Gem</span>' if cand.get('hidden_gem') else ''
+    
     st.markdown(f"""
     <div class="ct-card" style="padding:2rem;">
         <div style="display:flex;align-items:center;gap:1.2rem;margin-bottom:1.5rem;">
-            <div style="width:70px;height:70px;border-radius:50%;
-                background:linear-gradient(135deg,#6366f1,#8b5cf6);
-                display:flex;align-items:center;justify-content:center;
-                font-size:1.8rem;font-weight:900;color:white;
-                box-shadow:0 0 20px rgba(99,102,241,0.4);">
+            <div style="width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:900;color:white;box-shadow:0 0 20px rgba(99,102,241,0.4);">
                 {cand['name'][0]}
             </div>
             <div>
                 <div style="font-size:1.4rem;font-weight:800;color:#e2e8f0;">{cand['name']}</div>
-                <div style="color:#64748b;font-size:0.85rem;margin-top:3px;">
-                    📍 {cand.get('location','N/A')}
-                </div>
-                <div style="margin-top:5px;">
-                    {'<span style="background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#000;font-size:0.72rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:999px;">💎 Hidden Gem</span>' if cand.get('hidden_gem') else ''}
-                </div>
+                <div style="color:#64748b;font-size:0.85rem;margin-top:3px;">📍 {cand.get('location','N/A')}</div>
+                <div style="margin-top:5px;">{gem_badge}</div>
             </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
@@ -434,50 +438,29 @@ with tab4:
                 Primary Domain: <strong style="color:#a5b4fc;">{trajectory['primary_domain']}</strong>
                 · Momentum: <strong style="color:{'#10b981' if trajectory['momentum_tier']=='High Momentum' else '#f59e0b'};">{trajectory['momentum_tier']}</strong>
             </div>
-            
             <div style="position:relative;padding-left:2rem;">
-                <!-- Now -->
                 <div style="position:relative;padding-bottom:1.5rem;">
-                    <div style="position:absolute;left:-1.5rem;top:0.3rem;width:12px;height:12px;
-                         border-radius:50%;background:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,0.2);"></div>
+                    <div style="position:absolute;left:-1.5rem;top:0.3rem;width:12px;height:12px;border-radius:50%;background:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,0.2);"></div>
                     <div style="position:absolute;left:-0.95rem;top:1rem;width:2px;height:100%;background:#334155;"></div>
                     <div style="color:#64748b;font-size:0.72rem;text-transform:uppercase;">Now</div>
-                    <div style="font-weight:700;color:#e2e8f0;margin-top:2px;">
-                        {cand.get('experience', [{'title': 'Engineer'}])[-1]['title'] if cand.get('experience') else 'Software Engineer'}
-                    </div>
+                    <div style="font-weight:700;color:#e2e8f0;margin-top:2px;">{cand.get('experience', [{'title': 'Engineer'}])[-1]['title'] if cand.get('experience') else 'Software Engineer'}</div>
                 </div>
-                
-                <!-- 1 Year -->
                 <div style="position:relative;padding-bottom:1.5rem;">
-                    <div style="position:absolute;left:-1.5rem;top:0.3rem;width:12px;height:12px;
-                         border-radius:50%;background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,0.2);"></div>
+                    <div style="position:absolute;left:-1.5rem;top:0.3rem;width:12px;height:12px;border-radius:50%;background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,0.2);"></div>
                     <div style="position:absolute;left:-0.95rem;top:1rem;width:2px;height:100%;background:#334155;"></div>
                     <div style="color:#64748b;font-size:0.72rem;text-transform:uppercase;">1 Year</div>
-                    <div style="font-weight:700;color:#10b981;margin-top:2px;font-size:1.05rem;">
-                        {trajectory['trajectory']['1_year']}
-                    </div>
+                    <div style="font-weight:700;color:#10b981;margin-top:2px;font-size:1.05rem;">{trajectory['trajectory']['1_year']}</div>
                 </div>
-                
-                <!-- 3 Years -->
                 <div style="position:relative;padding-bottom:1.5rem;">
-                    <div style="position:absolute;left:-1.5rem;top:0.3rem;width:14px;height:14px;
-                         border-radius:50%;background:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,0.2);"></div>
+                    <div style="position:absolute;left:-1.5rem;top:0.3rem;width:14px;height:14px;border-radius:50%;background:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,0.2);"></div>
                     <div style="position:absolute;left:-0.95rem;top:1rem;width:2px;height:100%;background:#334155;"></div>
                     <div style="color:#64748b;font-size:0.72rem;text-transform:uppercase;">3 Years</div>
-                    <div style="font-weight:700;color:#8b5cf6;margin-top:2px;font-size:1.1rem;">
-                        {trajectory['trajectory']['3_years']}
-                    </div>
+                    <div style="font-weight:700;color:#8b5cf6;margin-top:2px;font-size:1.1rem;">{trajectory['trajectory']['3_years']}</div>
                 </div>
-                
-                <!-- 5 Years -->
                 <div style="position:relative;">
-                    <div style="position:absolute;left:-1.5rem;top:0.3rem;width:16px;height:16px;
-                         border-radius:50%;background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,0.25);
-                         animation:pulse-glow 2s infinite;"></div>
+                    <div style="position:absolute;left:-1.5rem;top:0.3rem;width:16px;height:16px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,0.25);animation:pulse-glow 2s infinite;"></div>
                     <div style="color:#64748b;font-size:0.72rem;text-transform:uppercase;">5 Years</div>
-                    <div style="font-weight:800;color:#f59e0b;margin-top:2px;font-size:1.15rem;">
-                        {trajectory['trajectory']['5_years']}
-                    </div>
+                    <div style="font-weight:800;color:#f59e0b;margin-top:2px;font-size:1.15rem;">{trajectory['trajectory']['5_years']}</div>
                 </div>
             </div>
         </div>

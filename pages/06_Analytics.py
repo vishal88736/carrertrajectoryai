@@ -42,6 +42,16 @@ render_page_header("Talent Analytics",
     "📈")
 
 # ── Top Metrics ───────────────────────────────────────────────────────────────
+if not ranked:
+    st.markdown("""
+    <div class="info-box" style="text-align:center; margin-top:2rem;">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">📥</div>
+        <strong>No candidates available.</strong>
+        <div style="color:#64748b; margin-top:0.3rem;">Upload a resume or JSON to see analytics, or enable Sample Data in the sidebar.</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
 avg_fps = sum(c["scores"]["fps"] for c in ranked) / len(ranked)
 avg_momentum = sum(c["scores"]["career_momentum"] for c in ranked) / len(ranked)
 avg_behavior = sum(c["scores"]["behavioral_evidence"] for c in ranked) / len(ranked)

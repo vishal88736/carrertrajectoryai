@@ -39,11 +39,15 @@ render_page_header(
 )
 
 # ── Top Metrics ───────────────────────────────────────────────────────────────
+avg_fps = sum(c['scores']['fps'] for c in ranked) / len(ranked) if ranked else 0.0
+top_fps = ranked[0]['scores']['fps'] if ranked else 0.0
+top_name = f"#{ranked[0]['name'].split()[0]}" if ranked else "—"
+
 render_metric_row([
-    {"label": "Total Candidates", "value": str(len(candidates)), "delta": "+3 this week", "icon": "👥"},
+    {"label": "Total Candidates", "value": str(len(candidates)), "delta": "+0 this week" if not candidates else "+3 this week", "icon": "👥"},
     {"label": "Hidden Gems", "value": str(len(gems)), "delta": "AI discovered", "icon": "💎"},
-    {"label": "Avg FPS Score", "value": f"{sum(c['scores']['fps'] for c in ranked)/len(ranked):.3f}", "icon": "📊"},
-    {"label": "Top FPS Score", "value": f"{ranked[0]['scores']['fps']:.3f}", "delta": f"#{ranked[0]['name'].split()[0]}", "icon": "🏆"},
+    {"label": "Avg FPS Score", "value": f"{avg_fps:.3f}", "icon": "📊"},
+    {"label": "Top FPS Score", "value": f"{top_fps:.3f}", "delta": top_name, "icon": "🏆"},
     {"label": "Active Jobs", "value": str(len(jobs)), "icon": "💼"},
 ])
 
@@ -68,33 +72,25 @@ with col_left:
         gem_icon = "💎 " if is_gem else ""
         bar_pct = fps * 100
 
+        gem_badge = '<span style="background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#000;font-size:0.65rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:999px;margin-left:0.4rem;">HIDDEN GEM</span>' if is_gem else ''
+
         st.markdown(f"""
         <div class="candidate-card" style="{'border-color:#f59e0b;box-shadow:0 0 15px rgba(245,158,11,0.15);' if is_gem else ''}">
             <div style="display:flex; align-items:center; gap:1rem;">
-                <div style="width:40px;height:40px;border-radius:50%;
-                    background:{'linear-gradient(135deg,#f59e0b,#fbbf24)' if i==0 else 'linear-gradient(135deg,#6366f1,#8b5cf6)'};
-                    display:flex;align-items:center;justify-content:center;
-                    font-weight:800;color:{'#000' if i==0 else 'white'};font-size:0.95rem;flex-shrink:0;">
+                <div style="width:40px;height:40px;border-radius:50%;background:{'linear-gradient(135deg,#f59e0b,#fbbf24)' if i==0 else 'linear-gradient(135deg,#6366f1,#8b5cf6)'};display:flex;align-items:center;justify-content:center;font-weight:800;color:{'#000' if i==0 else 'white'};font-size:0.95rem;flex-shrink:0;">
                     {'🥇' if i==0 else '#'+str(i+1)}
                 </div>
                 <div style="flex:1; min-width:0;">
-                    <div style="font-weight:700;font-size:0.95rem;color:#e2e8f0;">
-                        {gem_icon}{c['name']}
-                        {'<span style="background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#000;font-size:0.65rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:999px;margin-left:0.4rem;">HIDDEN GEM</span>' if is_gem else ''}
-                    </div>
-                    <div style="color:#64748b;font-size:0.78rem;margin-top:1px;">
-                        {c.get('location','N/A')} · {c.get('years_of_experience',0)} yrs · {', '.join(c['skills']['current'][:3])}...
-                    </div>
+                    <div style="font-weight:700;font-size:0.95rem;color:#e2e8f0;">{gem_icon}{c['name']}{gem_badge}</div>
+                    <div style="color:#64748b;font-size:0.78rem;margin-top:1px;">{c.get('location','N/A')} · {c.get('years_of_experience',0)} yrs · {', '.join(c['skills']['current'][:3])}...</div>
                     <div style="margin-top:0.5rem;">
                         <div style="background:#1e293b;border-radius:999px;height:5px;overflow:hidden;">
-                            <div style="width:{bar_pct}%;height:100%;border-radius:999px;
-                                background:linear-gradient(90deg,{color}88,{color});"></div>
+                            <div style="width:{bar_pct}%;height:100%;border-radius:999px;background:linear-gradient(90deg,{color}88,{color});"></div>
                         </div>
                     </div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;">
-                    <div style="font-size:1.6rem;font-weight:900;color:{color};
-                         font-family:'JetBrains Mono',monospace;line-height:1;">{fps:.3f}</div>
+                    <div style="font-size:1.6rem;font-weight:900;color:{color};font-family:'JetBrains Mono',monospace;line-height:1;">{fps:.3f}</div>
                     <div style="color:#64748b;font-size:0.7rem;font-weight:500;">FPS</div>
                 </div>
             </div>

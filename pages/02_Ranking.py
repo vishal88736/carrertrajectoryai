@@ -21,6 +21,12 @@ inject_css()
 import plotly.graph_objects as go
 import pandas as pd
 
+from data.database import (
+    save_custom_candidates_batch, 
+    get_upload_history, 
+    load_custom_candidates_by_batch
+)
+
 # ── State ─────────────────────────────────────────────────────────────────────
 if "selected_job_id" not in st.session_state:
     st.session_state.selected_job_id = "j001"
@@ -192,6 +198,24 @@ with st.expander("📤 Upload New Resume or Candidate JSON", expanded=False):
         The AI will parse, map candidate schemas, compute FPS, and rank them.
     </div>
     """, unsafe_allow_html=True)
+    
+    # ── History Selector ──
+    history = get_upload_history()
+    if history:
+        st.markdown("##### 📂 Load Past Upload")
+        hist_options = {"": "Select a past upload..."}
+        for h in history:
+            # e.g., "resume.pdf (2026-06-21 14:30) - 1 candidates"
+            lbl = f"{h['batch_name']} ({h['timestamp'][:16].replace('T', ' ')}) - {h['count']} candidate(s)"
+            hist_options[h['batch_name']] = lbl
+            
+        selected_batch = st.selectbox("Restore previous candidates", options=list(hist_options.keys()), format_func=lambda x: hist_options[x])
+        if selected_batch and st.button("Restore Selected Batch", use_container_width=True):
+            with st.spinner(f"Loading {selected_batch}..."):
+                restored = load_custom_candidates_by_batch(selected_batch)
+                st.session_state.custom_candidates = restored
+                st.rerun()
+        st.markdown("<hr style='border-color:#334155;margin:0.8rem 0;'>", unsafe_allow_html=True)
 
     # ── Load sample candidate JSON button ──
     st.markdown("##### ⚡ Quick Load Sample Candidates")
@@ -206,18 +230,20 @@ with st.expander("📤 Upload New Resume or Candidate JSON", expanded=False):
                 if not isinstance(data, list):
                     data = [data]
                 
-                added_count = 0
+                st.session_state.custom_candidates = []  # Clear previous
+                new_batch = []
+                
                 for c_data in data:
                     new_candidate = map_candidate_json_to_internal(c_data)
-                    # Check if candidate_id already exists to avoid duplicates
-                    if not any(x["id"] == new_candidate["id"] for x in st.session_state.custom_candidates):
-                        st.session_state.custom_candidates.append(new_candidate)
-                        added_count += 1
+                    st.session_state.custom_candidates.append(new_candidate)
+                    new_batch.append(new_candidate)
                 
-                if added_count > 0:
+                if new_batch:
+                    save_custom_candidates_batch(new_batch, "sample_candidates.json")
+                    
                     st.session_state._upload_success = {
                         "is_json": True,
-                        "count": added_count
+                        "count": len(new_batch)
                     }
                     st.rerun()
                 else:
@@ -252,16 +278,20 @@ with st.expander("📤 Upload New Resume or Candidate JSON", expanded=False):
                     if not isinstance(data, list):
                         data = [data]
                     
-                    added_count = 0
+                    st.session_state.custom_candidates = []  # Clear previous
+                    new_batch = []
+                    
                     for c_data in data:
                         new_candidate = map_candidate_json_to_internal(c_data)
-                        if not any(x["id"] == new_candidate["id"] for x in st.session_state.custom_candidates):
-                            st.session_state.custom_candidates.append(new_candidate)
-                            added_count += 1
+                        st.session_state.custom_candidates.append(new_candidate)
+                        new_batch.append(new_candidate)
+                    
+                    if new_batch:
+                        save_custom_candidates_batch(new_batch, file_name)
                     
                     st.session_state._upload_success = {
                         "is_json": True,
-                        "count": added_count
+                        "count": len(new_batch)
                     }
                     st.rerun()
                 except Exception as e:
@@ -315,7 +345,8 @@ with st.expander("📤 Upload New Resume or Candidate JSON", expanded=False):
                         "hidden_gem": False,
                     }
     
-                    st.session_state.custom_candidates.append(new_candidate)
+                    st.session_state.custom_candidates = [new_candidate]  # Clear previous and add new
+                    save_custom_candidates_batch([new_candidate], file_name)
     
                     # Store success info in session state so it survives rerun
                     st.session_state._upload_success = {
@@ -363,24 +394,36 @@ for i, c in enumerate(filtered):
 st.markdown(f"<div style='color:#64748b;font-size:0.85rem;margin-bottom:1rem;'>Showing {len(filtered)} of {len(ranked)} candidates</div>", unsafe_allow_html=True)
 
 # ── Comparison Table ──────────────────────────────────────────────────────────
-with st.expander("📋 Comparison Table View", expanded=False):
-    df = pd.DataFrame([{
-        "Rank": c["rank"],
-        "Name": c["name"],
-        "FPS": f"{c['scores']['fps']:.3f}",
-        "Semantic Fit": f"{c['scores']['semantic_fit']:.2f}",
-        "Momentum": f"{c['scores']['career_momentum']:.2f}",
-        "Behavior": f"{c['scores']['behavioral_evidence']:.2f}",
-        "Context": f"{c['scores']['contextual_intelligence']:.2f}",
-        "YoE": c.get("years_of_experience", 0),
-        "Gem": "💎" if c.get("hidden_gem") else "",
-    } for c in filtered])
-    st.dataframe(df, use_container_width=True, hide_index=True)
+with st.expander("📋 Comparison Table View", expanded=True):
+    if not filtered:
+        st.info("No candidates match the current filters.")
+    else:
+        df = pd.DataFrame([{
+            "Rank": c["rank"],
+            "Name": c["name"],
+            "FPS": f"{c['scores']['fps']:.3f}",
+            "Semantic Fit": f"{c['scores']['semantic_fit']:.2f}",
+            "Trajectory": f"{c['scores']['career_momentum']:.2f}",
+            "Behavioral": f"{c['scores']['behavioral_evidence']:.2f}",
+            "Proj Quality": f"{c['scores']['contextual_intelligence']:.2f}",
+            "Future Growth": f"{c['scores']['career_momentum']*0.3 + c['scores']['fps']*0.7:.2f}",
+            "YoE": c.get("years_of_experience", 0),
+            "Gem": "💎" if c.get("hidden_gem") else "",
+        } for c in filtered])
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ── Candidate Cards ───────────────────────────────────────────────────────────
-if not filtered:
+if not ranked:
+    st.markdown("""
+    <div class="info-box" style="text-align:center;">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">📥</div>
+        <strong>No candidates available.</strong>
+        <div style="color:#64748b; margin-top:0.3rem;">Upload a resume or JSON above, or enable Sample Data in the sidebar.</div>
+    </div>
+    """, unsafe_allow_html=True)
+elif not filtered:
     st.markdown("""
     <div class="info-box" style="text-align:center;">
         <div style="font-size:2rem; margin-bottom:0.5rem;">🔍</div>

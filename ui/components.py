@@ -637,6 +637,19 @@ def render_sidebar():
             st.rerun()
 
         st.markdown("---")
+        
+        # Toggle for Sample Data
+        use_sample = st.checkbox(
+            "Include Sample Candidates", 
+            value=st.session_state.get("use_sample_data", False),
+            key="sidebar_sample_toggle",
+            help="Check to include 6 dummy candidates for demonstration purposes. Uncheck to start with an empty database."
+        )
+        if use_sample != st.session_state.get("use_sample_data", False):
+            st.session_state.use_sample_data = use_sample
+            st.rerun()
+
+        st.markdown("---")
         st.markdown("""
         <div style="color:#475569; font-size:0.72rem; text-align:center; padding:0.5rem 0;">
             <div style="margin-bottom:0.3rem;">🔒 Enterprise Grade · GDPR Compliant</div>
