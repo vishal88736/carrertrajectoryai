@@ -266,7 +266,7 @@ This project is likely under a permissive license. Please check the `LICENSE` fi
 
 ## 🌟 Footer
 
-Built with ❤️ by the CareerTrajectory AI Team. 
+Built with ❤️ by the Runtime Terror Team. 
 Find us on GitHub: [CareerTrajectoryAI](https://github.com/gireesh7014/CareerTrajectoryAI). 
 We encourage you to **Fork**, **Star**, and **Report Issues** if you find any bugs or have suggestions!
 
