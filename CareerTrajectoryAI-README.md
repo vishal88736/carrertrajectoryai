@@ -102,7 +102,6 @@ CareerTrajectoryAI/
 │   ├── __init__.py
 │   └── components.py       # Reusable Streamlit UI components and CSS
 ├── requirements.txt          # Project dependencies for Streamlit app
-├── other-requirements.txt    # Dependencies for backend/AI components
 ├── Dockerfile                # Docker configuration for the application
 ├── docker-compose.yml        # Docker Compose setup for multi-service deployment
 └── validate.py               # Validation script for core components
@@ -139,10 +138,9 @@ To set up the project locally, follow these steps:
     ```
 
 3.  **Install Dependencies:**
-    The project uses separate requirement files for the Streamlit frontend and the AI backend components. Install them using pip:
+    The project uses a requirement file for the Streamlit frontend and the AI backend components. Install them using pip:
     ```bash
     pip install -r requirements.txt
-    pip install -r other-requirements.txt
     ```
 
 4.  **Run with Docker Compose:**
@@ -219,7 +217,6 @@ CareerTrajectoryAI/
 │   ├── __init__.py
 │   └── components.py       # Reusable Streamlit UI components and CSS
 ├── requirements.txt          # Project dependencies for Streamlit app
-├── other-requirements.txt    # Dependencies for backend/AI components
 ├── Dockerfile                # Docker configuration for the application
 ├── docker-compose.yml        # Docker Compose setup for multi-service deployment
 └── validate.py               # Validation script for core components
